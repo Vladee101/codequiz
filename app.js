@@ -1,9 +1,14 @@
 (() => {
-  const LEVELS = {
-    basic:    { title: "Базовый",     desc: "SELECT, GROUP BY, JOIN, NULL; HTTP-статусы и простые схемы" },
-    medium:   { title: "Средний",     desc: "Ловушки JOIN, оконные функции, семантика методов, типы в контракте" },
-    advanced: { title: "Продвинутый", desc: "Конкурентность, индексы, миграции, идемпотентность, вебхуки" }
+  const TRACKS = {
+    SQL: { title: "SQL Quiz", desc: "Чтение запросов: GROUP BY, JOIN, NULL, оконные функции, индексы, миграции" },
+    API: { title: "API Quiz", desc: "Контракты: HTTP-статусы, семантика методов, схемы, идемпотентность, вебхуки" }
   };
+  const LEVELS = {
+    basic:    { title: "Базовый" },
+    medium:   { title: "Средний" },
+    advanced: { title: "Продвинутый" }
+  };
+  const pool = (track, lvl) => (window.QUESTIONS[lvl] || []).filter((q) => q.topic === track);
   const LETTERS = ["A", "B", "C"];
   const app = document.getElementById("app");
   let state = null;
@@ -35,14 +40,14 @@
     });
   }
 
-  const storeKey = (lvl) => `sqlapiquiz:best:${lvl}`;
-  const getBest = (lvl) => {
-    try { const v = localStorage.getItem(storeKey(lvl)); return v === null ? null : Number(v); } catch { return null; }
+  const storeKey = (track, lvl) => `sqlapiquiz:best:${track}:${lvl}`;
+  const getBest = (track, lvl) => {
+    try { const v = localStorage.getItem(storeKey(track, lvl)); return v === null ? null : Number(v); } catch { return null; }
   };
-  const setBest = (lvl, score) => {
+  const setBest = (track, lvl, score) => {
     try {
-      const prev = getBest(lvl);
-      if (prev === null || score > prev) localStorage.setItem(storeKey(lvl), String(score));
+      const prev = getBest(track, lvl);
+      if (prev === null || score > prev) localStorage.setItem(storeKey(track, lvl), String(score));
     } catch { /* storage недоступен — не критично */ }
   };
 
@@ -51,36 +56,55 @@
     state = null;
     app.innerHTML = `
       <h1>SQL & API Quiz</h1>
-      <p class="sub">Читай чужой (и сгенерированный ИИ) SQL и контракты глазами аналитика: найди ошибку, предскажи результат. Вопрос — три варианта — короткое пояснение.</p>
+      <p class="sub">Читай чужой (и сгенерированный ИИ) SQL и контракты глазами аналитика: найди ошибку, предскажи результат. Выбери направление.</p>
+      <div class="levels">
+        ${Object.entries(TRACKS).map(([id, t]) => {
+          const total = Object.keys(LEVELS).reduce((n, l) => n + pool(id, l).length, 0);
+          return `<button class="level" data-track="${id}">
+            <div><b>${t.title}</b><span class="d">${t.desc}</span></div>
+            <div class="best">${total} вопросов</div>
+          </button>`;
+        }).join("")}
+      </div>`;
+    app.querySelectorAll(".level").forEach((b) => b.addEventListener("click", () => renderLevels(b.dataset.track)));
+  }
+
+  function renderLevels(track) {
+    state = null;
+    app.innerHTML = `
+      <button class="link" id="home">← к направлениям</button>
+      <h1>${TRACKS[track].title}</h1>
+      <p class="sub">Выбери уровень. Вопрос — три варианта — короткое пояснение.</p>
       <div class="levels">
         ${Object.entries(LEVELS).map(([id, l]) => {
-          const total = (window.QUESTIONS[id] || []).length;
-          const best = getBest(id);
+          const total = pool(track, id).length;
+          const best = getBest(track, id);
           return `<button class="level" data-level="${id}">
-            <div><b>${l.title}</b><span class="d">${l.desc}</span></div>
+            <div><b>${l.title}</b></div>
             <div class="best">${best === null ? `${total} вопросов` : `рекорд ${best}/${total}`}</div>
           </button>`;
         }).join("")}
       </div>`;
-    app.querySelectorAll(".level").forEach((b) => b.addEventListener("click", () => startLevel(b.dataset.level)));
+    document.getElementById("home").addEventListener("click", renderHome);
+    app.querySelectorAll(".level").forEach((b) => b.addEventListener("click", () => startLevel(track, b.dataset.level)));
   }
 
-  function startLevel(level) {
-    const questions = shuffle(window.QUESTIONS[level]).map((q) => ({
+  function startLevel(track, level) {
+    const questions = shuffle(pool(track, level)).map((q) => ({
       ...q,
       opts: shuffle(q.options.map((text, i) => ({ text, correct: i === q.answer })))
     }));
-    state = { level, questions, i: 0, score: 0, answered: false, mistakes: [] };
+    state = { track, level, questions, i: 0, score: 0, answered: false, mistakes: [] };
     renderQuestion();
   }
 
   function renderQuestion() {
-    const { level, questions, i } = state;
+    const { track, level, questions, i } = state;
     const q = questions[i];
     state.answered = false;
     app.innerHTML = `
       <button class="link" id="home">← к уровням</button>
-      <div class="top"><span>${LEVELS[level].title}</span><span>${i + 1} / ${questions.length}</span></div>
+      <div class="top"><span>${track} · ${LEVELS[level].title}</span><span>${i + 1} / ${questions.length}</span></div>
       <div class="bar"><i style="width:${(i / questions.length) * 100}%"></i></div>
       <div class="badge">${q.topic}</div>
       <h2>${esc(q.q)}</h2>
@@ -89,7 +113,7 @@
         ${q.opts.map((o, k) => `<button class="opt" data-k="${k}"><span class="key">${LETTERS[k]}</span><span>${esc(o.text)}</span></button>`).join("")}
       </div>
       <div id="fb"></div>`;
-    document.getElementById("home").addEventListener("click", renderHome);
+    document.getElementById("home").addEventListener("click", () => renderLevels(track));
     app.querySelectorAll(".opt").forEach((b) => b.addEventListener("click", () => answer(Number(b.dataset.k))));
   }
 
@@ -127,16 +151,16 @@
   }
 
   function renderResult() {
-    const { level, questions, score, mistakes } = state;
+    const { track, level, questions, score, mistakes } = state;
     const total = questions.length;
-    const prevBest = getBest(level);
-    setBest(level, score);
+    const prevBest = getBest(track, level);
+    setBest(track, level, score);
     const pct = score / total;
     const msg = pct === 1 ? "Без единой ошибки." : pct >= 0.7 ? "Хороший результат." : "Есть что подтянуть — разбор ниже.";
     app.innerHTML = `
       <button class="link" id="home">← к уровням</button>
       <div class="card">
-        <div class="muted">${LEVELS[level].title} уровень</div>
+        <div class="muted">${track} · ${LEVELS[level].title} уровень</div>
         <div class="score">${score} / ${total}</div>
         <div>${msg}${prevBest !== null && score > prevBest ? " Новый рекорд." : ""}</div>
         <div class="actions">
@@ -156,9 +180,9 @@
             <p>${esc(q.explain)}</p>
           </div>`).join("")}
       </div>` : ""}`;
-    document.getElementById("home").addEventListener("click", renderHome);
-    document.getElementById("home2").addEventListener("click", renderHome);
-    document.getElementById("retry").addEventListener("click", () => startLevel(level));
+    document.getElementById("home").addEventListener("click", () => renderLevels(track));
+    document.getElementById("home2").addEventListener("click", () => renderLevels(track));
+    document.getElementById("retry").addEventListener("click", () => startLevel(track, level));
   }
 
   /* ---------- keyboard ---------- */
