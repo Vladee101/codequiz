@@ -194,3 +194,18 @@ pre.code {
 .sq-guard { fill: var(--accent); font-size: 11.5px; font-weight: 600; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
 .sq-sep { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
 .sq-note { fill: var(--ok-bg); stroke: var(--ok); stroke-width: 1.2; }
+
+/* State */
+.std { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px; margin: 0 0 16px; overflow-x: auto; }
+.std svg { display: block; width: 100%; margin: 0 auto; height: auto; font: 12.5px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.st-node { fill: var(--card); stroke: var(--text); stroke-width: 1.6; }
+.st-init { fill: var(--text); stroke: var(--text); stroke-width: 1.2; }
+.st-comp { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+.st-comp-t { fill: var(--text); font-weight: 700; font-size: 13px; }
+.st-div { stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 6 4; }
+.st-sep { stroke: var(--border); stroke-width: 1.2; }
+.st-line { stroke: var(--muted); stroke-width: 1.6; }
+.st-arrow { fill: var(--muted); }
+.st-t { fill: var(--text); }
+.st-t.sm { font-size: 11.5px; }
+.std text.st-t.sm { paint-order: stroke; stroke: var(--card); stroke-width: 3px; }

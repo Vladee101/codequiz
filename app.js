@@ -5,7 +5,8 @@
     ERD: { title: "ERD Quiz", desc: "Диаграммы сущностей: связи 1:N и M:N, ключи, нормализация, целостность" },
     BPMN: { title: "BPMN Quiz", desc: "Диаграммы процессов: события, шлюзы, токены, ошибки, сообщения, подпроцессы" },
     UC: { title: "Use Case Quiz", desc: "Диаграммы вариантов использования: актёры, include, extend, границы системы, сценарии" },
-    SEQ: { title: "Sequence Quiz", desc: "Диаграммы последовательности: сообщения, активации, фрагменты alt/opt/loop/par, асинхронность" }
+    SEQ: { title: "Sequence Quiz", desc: "Диаграммы последовательности: сообщения, активации, фрагменты alt/opt/loop/par, асинхронность" },
+    STATE: { title: "State Quiz", desc: "Диаграммы состояний: переходы, охранные условия, действия, вложенные состояния, история" }
   };
   const LEVELS = {
     basic:    { title: "Базовый" },
@@ -485,7 +486,115 @@
     return `<div class="seqd"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма последовательности">${svg}</svg></div>`;
   }
 
-  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : "");
+  /* ---------- State ---------- */
+  const STD = { CW: 224, RH: 104, PAD: 14, SW: 124, SH: 44, LINE: 14 };
+  let stSeq = 0;
+
+  function stateBlock(name) {
+    const d = window.STATES && window.STATES[name];
+    if (!d) return "";
+    const { CW, RH, PAD, SW, SH, LINE } = STD;
+    const id = ++stSeq;
+    const nodes = {};
+    d.nodes.forEach((n) => { nodes[n.id] = n; });
+    const cols = Math.max(...d.nodes.map((n) => (n.type === "comp" ? n.c1 : n.col))) + 1;
+    const rows = Math.max(...d.nodes.map((n) => (n.type === "comp" ? n.r1 : n.row))) + 1;
+    const width = PAD * 2 + cols * CW;
+    const topx = d.flows.some(([a, b]) => a === b) ? 36 : 0;
+    const height = PAD * 2 + rows * RH + 8 + topx;
+    const center = (n) => (n.type === "comp"
+      ? { x: PAD + (n.c0 + n.c1 + 1) * CW / 2, y: PAD + (n.r0 + n.r1 + 1) * RH / 2 }
+      : { x: PAD + n.col * CW + CW / 2, y: PAD + topx + n.row * RH + RH / 2 });
+    const stH = (n) => SH + (n.actions ? n.actions.length * LINE + 6 : 0);
+    const size = (n) => {
+      if (n.type === "comp") return { hw: (n.c1 - n.c0 + 1) * CW / 2 - 10, hh: (n.r1 - n.r0 + 1) * RH / 2 - 4 };
+      if (n.type === "init") return { hw: 9, hh: 9, round: true };
+      if (n.type === "final") return { hw: 13, hh: 13, round: true };
+      if (n.type === "choice") return { hw: 16, hh: 16 };
+      if (n.type === "history") return { hw: 13, hh: 13, round: true };
+      if (n.type === "fork") return n.vert ? { hw: 4, hh: 34 } : { hw: 40, hh: 4 };
+      return { hw: SW / 2, hh: stH(n) / 2 };
+    };
+    const clip = (n, toward) => {
+      const c = center(n), t = center(toward);
+      const dx = t.x - c.x, dy = t.y - c.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const s = size(n);
+      const k = s.round ? s.hw : Math.min(ux ? s.hw / Math.abs(ux) : Infinity, uy ? s.hh / Math.abs(uy) : Infinity);
+      return { x: c.x + ux * k, y: c.y + uy * k };
+    };
+
+    let svg = `<defs><marker id="sta${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path class="st-arrow" d="M0 1L10 5L0 9z"/></marker></defs>`;
+
+    d.nodes.filter((n) => n.type === "comp").forEach((n) => {
+      const x0 = PAD + n.c0 * CW + 10, x1 = PAD + (n.c1 + 1) * CW - 10;
+      const y0 = PAD + n.r0 * RH + 4, y1 = PAD + (n.r1 + 1) * RH - 4;
+      svg += `<rect class="st-comp" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="14"/>` +
+        `<text class="st-comp-t" x="${x0 + 14}" y="${y0 + 20}">${esc(n.label)}</text>`;
+      if (n.divider) svg += `<line class="st-div" x1="${x0}" y1="${PAD + n.divider * RH}" x2="${x1}" y2="${PAD + n.divider * RH}"/>`;
+    });
+
+    const pairKey = (a, b) => [a, b].sort().join("|");
+    const counts = {};
+    d.flows.forEach(([a, b]) => { if (a !== b) counts[pairKey(a, b)] = (counts[pairKey(a, b)] || 0) + 1; });
+
+    svg += d.flows.map(([from, to, label, opt]) => {
+      const a = nodes[from], b = nodes[to];
+      const lines = label ? wrap(label, 19) : [];
+      if (from === to) {
+        const c = center(a), s = size(a);
+        const x1 = c.x - 16, x2 = c.x + 16, yt = c.y - s.hh;
+        return `<path class="st-line" fill="none" d="M${x1} ${yt}C${x1 - 6} ${yt - 40},${x2 + 6} ${yt - 40},${x2} ${yt}" marker-end="url(#sta${id})"/>` +
+          `<text class="st-t" text-anchor="middle">${lines.map((ln, i) => `<tspan x="${c.x}" y="${yt - 40 - (lines.length - 1 - i) * 13}">${esc(ln)}</tspan>`).join("")}</text>`;
+      }
+      const ca = center(a), cb = center(b);
+      const p = clip(a, b), q = clip(b, a);
+      const twoWay = counts[pairKey(from, to)] > 1;
+      const sign = twoWay ? 1 : 0;
+      const off = (opt && opt.curve !== undefined ? opt.curve : sign * 34);
+      const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      const mx = (p.x + q.x) / 2 + nx * off, my = (p.y + q.y) / 2 + ny * off;
+      const d1 = off ? `M${p.x} ${p.y}Q${mx + nx * off * 0.0} ${my},${q.x} ${q.y}` : `M${p.x} ${p.y}L${q.x} ${q.y}`;
+      const sideX = off && Math.abs(nx) > 0.6 ? Math.sign(nx * off) : 0;
+      const lx = (p.x + q.x) / 2 + nx * (off * 0.5 + Math.sign(off) * (sideX ? 6 : 16));
+      const ly = (p.y + q.y) / 2 + ny * (off * 0.5 + Math.sign(off) * 16);
+      const anchor = sideX > 0 ? "start" : sideX < 0 ? "end" : "middle";
+      const above = off === 0 ? -8 : 0;
+      return `<path class="st-line" fill="none" d="${d1}" marker-end="url(#sta${id})"/>` +
+        (lines.length ? `<text class="st-t sm" text-anchor="${anchor}">${lines.map((ln, i) => `<tspan x="${lx}" y="${ly + above + i * 13 - (lines.length - 1) * 6}">${esc(ln)}</tspan>`).join("")}</text>` : "");
+    }).join("");
+
+    d.nodes.forEach((n) => {
+      if (n.type === "comp") return;
+      const c = center(n);
+      if (n.type === "init") svg += `<circle class="st-init" cx="${c.x}" cy="${c.y}" r="9"/>`;
+      else if (n.type === "final") svg += `<circle class="st-node" cx="${c.x}" cy="${c.y}" r="13"/><circle class="st-init" cx="${c.x}" cy="${c.y}" r="7"/>`;
+      else if (n.type === "choice") svg += `<path class="st-node" d="M${c.x} ${c.y - 16}L${c.x + 16} ${c.y}L${c.x} ${c.y + 16}L${c.x - 16} ${c.y}z"/>`;
+      else if (n.type === "history") svg += `<circle class="st-node" cx="${c.x}" cy="${c.y}" r="13"/><text class="st-t" x="${c.x}" y="${c.y + 5}" text-anchor="middle" font-weight="700">H</text>`;
+      else if (n.type === "fork") svg += n.vert
+        ? `<rect class="st-init" x="${c.x - 4}" y="${c.y - 34}" width="8" height="68" rx="2"/>`
+        : `<rect class="st-init" x="${c.x - 40}" y="${c.y - 4}" width="80" height="8" rx="2"/>`;
+      else {
+        const h = stH(n);
+        svg += `<rect class="st-node" x="${c.x - SW / 2}" y="${c.y - h / 2}" width="${SW}" height="${h}" rx="12"/>`;
+        if (n.actions) {
+          svg += `<line class="st-sep" x1="${c.x - SW / 2}" y1="${c.y - h / 2 + 28}" x2="${c.x + SW / 2}" y2="${c.y - h / 2 + 28}"/>` +
+            n.actions.map((a, i) => `<text class="st-t sm" x="${c.x - SW / 2 + 8}" y="${c.y - h / 2 + 28 + 15 + i * LINE}">${esc(a)}</text>`).join("");
+          svg += `<text class="st-t" x="${c.x}" y="${c.y - h / 2 + 19}" text-anchor="middle" font-weight="600">${esc(n.label)}</text>`;
+        } else {
+          const lines = wrap(n.label, 15);
+          svg += `<text class="st-t" text-anchor="middle" font-weight="600">${lines.map((ln, i) => `<tspan x="${c.x}" y="${c.y + 5 - (lines.length - 1) * 7 + i * 14}">${esc(ln)}</tspan>`).join("")}</text>`;
+        }
+      }
+      if (n.note) svg += `<text class="st-t sm" x="${c.x}" y="${c.y + size(n).hh + 15}" text-anchor="middle">${esc(n.note)}</text>`;
+    });
+
+    return `<div class="std"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма состояний">${svg}</svg></div>`;
+  }
+
+  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : q.state ? stateBlock(q.state) : "");
 
   const storeKey = (track, lvl) => `sqlapiquiz:best:${track}:${lvl}`;
   const getBest = (track, lvl) => {
