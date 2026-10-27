@@ -7,7 +7,8 @@
     UC: { title: "Use Case Quiz", desc: "Диаграммы вариантов использования: актёры, include, extend, границы системы, сценарии" },
     SEQ: { title: "Sequence Quiz", desc: "Диаграммы последовательности: сообщения, активации, фрагменты alt/opt/loop/par, асинхронность" },
     STATE: { title: "State Quiz", desc: "Диаграммы состояний: переходы, охранные условия, действия, вложенные состояния, история" },
-    ACT: { title: "Activity Quiz", desc: "Диаграммы активности: действия, ветвления, fork/join, дорожки, объекты и сигналы" }
+    ACT: { title: "Activity Quiz", desc: "Диаграммы активности: действия, ветвления, fork/join, дорожки, объекты и сигналы" },
+    CLS: { title: "Class Quiz", desc: "Диаграммы классов: наследование, ассоциации, агрегация и композиция, интерфейсы, кратности" }
   };
   const LEVELS = {
     basic:    { title: "Базовый" },
@@ -726,7 +727,110 @@
     return `<div class="actd"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма активности">${svg}</svg></div>`;
   }
 
-  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : q.state ? stateBlock(q.state) : q.act ? actBlock(q.act) : "");
+  /* ---------- Class ---------- */
+  const CL = { CW: 250, PAD: 16, GAP: 64, LH: 16, HEAD: 30 };
+  let clsSeq = 0;
+
+  function classBlock(name) {
+    const d = window.CLASSES && window.CLASSES[name];
+    if (!d) return "";
+    const { CW, PAD, GAP, LH, HEAD } = CL;
+    const id = ++clsSeq;
+    const nodes = {};
+    d.nodes.forEach((n) => { nodes[n.id] = n; });
+
+    d.nodes.forEach((n) => {
+      const attrs = n.attrs || [], ops = n.ops || [];
+      const widest = Math.max(n.name.length + 4, ...attrs.map((a) => a.length), ...ops.map((o) => o.length), 14);
+      n.w = Math.max(132, Math.min(CW - 30, widest * 6.9 + 22));
+      const head = HEAD + (n.kind && n.kind !== "class" ? 14 : 0);
+      n.head = head;
+      const sec = (arr) => (arr.length ? arr.length * LH + 10 : 12);
+      if (n.kind === "enum") n.h = head + sec(attrs);
+      else if (n.kind === "interface") n.h = head + sec(ops);
+      else n.h = head + sec(attrs) + sec(ops);
+    });
+    const cols = Math.max(...d.nodes.map((n) => n.col)) + 1;
+    const rows = Math.max(...d.nodes.map((n) => n.row)) + 1;
+    const rowH = Array.from({ length: rows }, (_, r) => Math.max(0, ...d.nodes.filter((n) => n.row === r).map((n) => n.h)));
+    const rowTop = rowH.map((_, r) => PAD + rowH.slice(0, r).reduce((a, h) => a + h + GAP, 0));
+    d.nodes.forEach((n) => {
+      n.cx = PAD + n.col * CW + CW / 2;
+      n.cy = rowTop[n.row] + rowH[n.row] / 2;
+    });
+    const width = PAD * 2 + cols * CW;
+    const height = PAD * 2 + rowH.reduce((a, h) => a + h, 0) + (rows - 1) * GAP + 6;
+
+    const clip = (a, b) => {
+      const dx = b.cx - a.cx, dy = b.cy - a.cy;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const k = Math.min(ux ? a.w / 2 / Math.abs(ux) : Infinity, uy ? a.h / 2 / Math.abs(uy) : Infinity);
+      return { x: a.cx + ux * k, y: a.cy + uy * k, ux, uy };
+    };
+
+    let svg = `<defs>
+      <marker id="clt${id}" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" orient="auto"><path class="cl-hollow" d="M1 1L11 6L1 11z"/></marker>
+      <marker id="clo${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path class="cl-open" d="M1 1L9 5L1 9"/></marker>
+      <marker id="cld${id}" viewBox="0 0 18 10" refX="17" refY="5" markerWidth="18" markerHeight="10" orient="auto-start-reverse"><path class="cl-hollow" d="M1 5L9 1L17 5L9 9z"/></marker>
+      <marker id="clf${id}" viewBox="0 0 18 10" refX="17" refY="5" markerWidth="18" markerHeight="10" orient="auto-start-reverse"><path class="cl-solid" d="M1 5L9 1L17 5L9 9z"/></marker>
+    </defs>`;
+
+    const pairs = {};
+    d.rels.forEach(([a, b]) => { const k = [a, b].sort().join("|"); pairs[k] = (pairs[k] || 0) + 1; });
+    const seen = {};
+    svg += d.rels.map(([from, to, kind, label, mFrom, mTo]) => {
+      const a = nodes[from], b = nodes[to];
+      const key = [from, to].sort().join("|");
+      seen[key] = (seen[key] || 0) + 1;
+      const shift = pairs[key] > 1 ? (seen[key] - 1 - (pairs[key] - 1) / 2) * 26 * (from > to ? -1 : 1) : 0;
+      const p = clip(a, b), q = clip(b, a);
+      const nx = -(q.y - p.y), ny = q.x - p.x, nl = Math.hypot(nx, ny) || 1;
+      const ox = nx / nl * shift, oy = ny / nl * shift;
+      const x1 = p.x + ox, y1 = p.y + oy, x2 = q.x + ox, y2 = q.y + oy;
+      const dashed = kind === "realize" || kind === "dep";
+      let m = "";
+      if (kind === "inherit" || kind === "realize") m = ` marker-end="url(#clt${id})"`;
+      else if (kind === "dep" || kind === "assocd") m = ` marker-end="url(#clo${id})"`;
+      else if (kind === "agg") m = ` marker-start="url(#cld${id})"`;
+      else if (kind === "comp") m = ` marker-start="url(#clf${id})"`;
+      let out = `<line class="cl-line${dashed ? " dash" : ""}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${m}/>`;
+      const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const vx = -uy, vy = ux;
+      const lab = (t, px, py, anchor) => `<text class="cl-t sm cl-lab" x="${px}" y="${py}" text-anchor="${anchor || "middle"}">${esc(t)}</text>`;
+      if (mFrom) out += lab(mFrom, x1 + ux * 22 + vx * 12, y1 + uy * 22 + vy * 12 + 4);
+      if (mTo) out += lab(mTo, x2 - ux * 22 + vx * 12, y2 - uy * 22 + vy * 12 + 4);
+      if (label) out += lab(label, (x1 + x2) / 2 - vx * 11, (y1 + y2) / 2 - vy * 11 + 3);
+      return out;
+    }).join("");
+
+    d.nodes.forEach((n) => {
+      const x = n.cx - n.w / 2, y = n.cy - n.h / 2;
+      const attrs = n.attrs || [], ops = n.ops || [];
+      svg += `<rect class="cl-box" x="${x}" y="${y}" width="${n.w}" height="${n.h}"/>`;
+      let ty = y + 19;
+      if (n.kind && n.kind !== "class" && n.kind !== "abstract") {
+        svg += `<text class="cl-t sm" x="${n.cx}" y="${y + 14}" text-anchor="middle">«${esc(n.kind)}»</text>`;
+        ty = y + 30;
+      }
+      svg += `<text class="cl-t cl-name${n.kind === "abstract" ? " it" : ""}" x="${n.cx}" y="${ty}" text-anchor="middle">${esc(n.name)}</text>`;
+      let yy = y + n.head;
+      svg += `<line class="cl-sep" x1="${x}" y1="${yy}" x2="${x + n.w}" y2="${yy}"/>`;
+      attrs.forEach((a, i) => { svg += `<text class="cl-t cl-m${a.startsWith("_") ? " ul" : ""}" x="${x + 8}" y="${yy + 16 + i * LH}">${esc(a.replace(/^_/, ""))}</text>`; });
+      if (n.kind !== "enum" && n.kind !== "interface") {
+        yy += attrs.length ? attrs.length * LH + 10 : 12;
+        svg += `<line class="cl-sep" x1="${x}" y1="${yy}" x2="${x + n.w}" y2="${yy}"/>`;
+        ops.forEach((o, i) => { svg += `<text class="cl-t cl-m${o.startsWith("_") ? " ul" : ""}${o.startsWith("*") ? " it" : ""}" x="${x + 8}" y="${yy + 16 + i * LH}">${esc(o.replace(/^[_*]/, ""))}</text>`; });
+      } else if (n.kind === "interface") {
+        ops.forEach((o, i) => { svg += `<text class="cl-t cl-m it" x="${x + 8}" y="${yy + 16 + i * LH}">${esc(o.replace(/^[_*]/, ""))}</text>`; });
+      }
+    });
+
+    return `<div class="cls"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма классов">${svg}</svg></div>`;
+  }
+
+  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : q.state ? stateBlock(q.state) : q.act ? actBlock(q.act) : q.cls ? classBlock(q.cls) : "");
 
   const storeKey = (track, lvl) => `sqlapiquiz:best:${track}:${lvl}`;
   const getBest = (track, lvl) => {

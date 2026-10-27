@@ -225,3 +225,21 @@ pre.code {
 .ac-t { fill: var(--text); }
 .ac-t.sm { font-size: 11.5px; }
 .ac-flow-t { fill: var(--accent); font-size: 11.5px; font-weight: 600; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
+
+/* Class */
+.cls { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px; margin: 0 0 16px; overflow-x: auto; }
+.cls svg { display: block; width: 100%; margin: 0 auto; height: auto; font: 12.5px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.cl-box { fill: var(--card); stroke: var(--text); stroke-width: 1.5; }
+.cl-sep { stroke: var(--text); stroke-width: 1.2; }
+.cl-t { fill: var(--text); }
+.cl-t.sm { font-size: 11.5px; }
+.cl-name { font-weight: 700; font-size: 13px; }
+.cl-name.it, .cl-t.it { font-style: italic; }
+.cl-m { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.cl-m.ul { text-decoration: underline; }
+.cl-line { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+.cl-line.dash { stroke-dasharray: 6 4; }
+.cl-hollow { fill: var(--card); stroke: var(--muted); stroke-width: 1.4; }
+.cl-solid { fill: var(--muted); stroke: var(--muted); stroke-width: 1.2; }
+.cl-open { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.cl-lab { fill: var(--accent); font-weight: 600; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
