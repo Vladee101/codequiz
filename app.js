@@ -946,14 +946,45 @@
       <p class="sub">Читай чужой (и сгенерированный ИИ) SQL и контракты глазами аналитика: найди ошибку, предскажи результат. Выбери направление.</p>
       <div class="levels">
         ${Object.entries(TRACKS).map(([id, t]) => {
-          const total = Object.keys(LEVELS).reduce((n, l) => n + pool(id, l).length, 0);
+          const total = (window.TRACK_COUNTS && window.TRACK_COUNTS[id]) || Object.keys(LEVELS).reduce((n, l) => n + pool(id, l).length, 0);
           return `<button class="level" data-track="${id}">
             <div><b>${t.title}</b><span class="d">${t.desc}</span></div>
             <div class="best">${total} вопросов</div>
           </button>`;
         }).join("")}
       </div>`;
-    app.querySelectorAll(".level").forEach((b) => b.addEventListener("click", () => renderLevels(b.dataset.track)));
+    app.querySelectorAll(".level").forEach((b) => b.addEventListener("click", () => openTrack(b.dataset.track)));
+  }
+
+  /* Данные направления лежат в отдельном файле и подгружаются при первом выборе. */
+  const loaded = {};
+  function loadTrack(track) {
+    if (loaded[track]) return loaded[track];
+    const src = window.TRACK_FILES && window.TRACK_FILES[track];
+    if (!src) return Promise.resolve();
+    loaded[track] = new Promise((resolve, reject) => {
+      const el = document.createElement("script");
+      el.src = src;
+      el.onload = resolve;
+      el.onerror = () => { delete loaded[track]; reject(new Error("load failed")); };
+      document.head.appendChild(el);
+    });
+    return loaded[track];
+  }
+
+  function openTrack(track) {
+    if (loaded[track] === undefined && pool(track, "basic").length === 0) {
+      state = null;
+      app.innerHTML = `<button class="link" id="home">← к направлениям</button><h1>${TRACKS[track].title}</h1><p class="sub">Загрузка вопросов…</p>`;
+      document.getElementById("home").addEventListener("click", renderHome);
+    }
+    loadTrack(track).then(() => renderLevels(track)).catch(() => {
+      app.innerHTML = `<button class="link" id="home">← к направлениям</button><h1>${TRACKS[track].title}</h1>
+        <p class="sub">Не удалось загрузить вопросы. Проверьте соединение и попробуйте ещё раз.</p>
+        <div class="actions"><button class="btn" id="retry-load">Повторить</button></div>`;
+      document.getElementById("home").addEventListener("click", renderHome);
+      document.getElementById("retry-load").addEventListener("click", () => openTrack(track));
+    });
   }
 
   function renderLevels(track) {
