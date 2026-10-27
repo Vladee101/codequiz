@@ -209,3 +209,19 @@ pre.code {
 .st-t { fill: var(--text); }
 .st-t.sm { font-size: 11.5px; }
 .std text.st-t.sm { paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
+
+/* Activity */
+.actd { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px; margin: 0 0 16px; overflow-x: auto; }
+.actd svg { display: block; width: 100%; margin: 0 auto; height: auto; font: 12.5px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.ac-lane { fill: none; stroke: var(--border); stroke-width: 1.5; }
+.ac-lane-t { fill: var(--muted); font-weight: 600; font-size: 12px; }
+.ac-node { fill: var(--card); stroke: var(--text); stroke-width: 1.6; }
+.ac-fill { fill: var(--text); stroke: var(--text); }
+.ac-bar { fill: var(--text); stroke: var(--text); }
+.ac-ico { fill: none; stroke: var(--text); stroke-width: 1.5; }
+.ac-flow { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.ac-flow.dash { stroke-dasharray: 5 4; }
+.ac-arrow { fill: var(--muted); }
+.ac-t { fill: var(--text); }
+.ac-t.sm { font-size: 11.5px; }
+.ac-flow-t { fill: var(--accent); font-size: 11.5px; font-weight: 600; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }

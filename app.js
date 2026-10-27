@@ -6,7 +6,8 @@
     BPMN: { title: "BPMN Quiz", desc: "Диаграммы процессов: события, шлюзы, токены, ошибки, сообщения, подпроцессы" },
     UC: { title: "Use Case Quiz", desc: "Диаграммы вариантов использования: актёры, include, extend, границы системы, сценарии" },
     SEQ: { title: "Sequence Quiz", desc: "Диаграммы последовательности: сообщения, активации, фрагменты alt/opt/loop/par, асинхронность" },
-    STATE: { title: "State Quiz", desc: "Диаграммы состояний: переходы, охранные условия, действия, вложенные состояния, история" }
+    STATE: { title: "State Quiz", desc: "Диаграммы состояний: переходы, охранные условия, действия, вложенные состояния, история" },
+    ACT: { title: "Activity Quiz", desc: "Диаграммы активности: действия, ветвления, fork/join, дорожки, объекты и сигналы" }
   };
   const LEVELS = {
     basic:    { title: "Базовый" },
@@ -594,7 +595,138 @@
     return `<div class="std"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма состояний">${svg}</svg></div>`;
   }
 
-  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : q.state ? stateBlock(q.state) : "");
+  /* ---------- Activity ---------- */
+  const AC = { CW: 160, RH: 100, PAD: 12, LANEW: 30, TW: 112, TH: 50, R: 14, G: 20 };
+  let actSeq = 0;
+
+  function actBlock(name) {
+    const d = window.ACTS && window.ACTS[name];
+    if (!d) return "";
+    const { CW, RH, PAD, LANEW, TW, TH, R, G } = AC;
+    const id = ++actSeq;
+    const lanes = d.lanes || [];
+    const left = PAD + (lanes.length ? LANEW : 0);
+    const nodes = {};
+    d.nodes.forEach((n) => { nodes[n.id] = n; });
+    const cols = Math.max(...d.nodes.map((n) => n.col)) + 1;
+    const rows = lanes.length ? lanes.reduce((a, l) => a + l.rows, 0) : Math.ceil(Math.max(...d.nodes.map((n) => n.row)) + 1);
+    const width = left + cols * CW + PAD;
+    const height = PAD * 2 + rows * RH + 20;
+
+    const half = (n) => {
+      switch (n.type) {
+        case "action": case "call": return [TW / 2, TH / 2];
+        case "dec": case "merge": return [G, G];
+        case "fork": case "join": return n.vert ? [4, (n.span || 1) * RH / 2 - 14] : [(n.span || 1) * CW / 2 - 24, 4];
+        case "obj": return [46, 20];
+        case "send": case "accept": return [52, 24];
+        case "time": return [14, 17];
+        default: return [R, R];
+      }
+    };
+    const center = (n) => ({ x: left + n.col * CW + CW / 2, y: PAD + n.row * RH + RH / 2 });
+
+    let svg = `<defs>
+      <marker id="aca${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="ac-arrow" d="M0 1L10 5L0 9z"/></marker>
+    </defs>`;
+
+    let y0 = PAD;
+    lanes.forEach((l) => {
+      const h = l.rows * RH;
+      svg += `<rect class="ac-lane" x="${PAD}" y="${y0}" width="${width - PAD * 2}" height="${h}"/>` +
+        `<rect class="ac-lane" x="${PAD}" y="${y0}" width="${LANEW}" height="${h}"/>` +
+        `<text class="ac-lane-t" transform="translate(${PAD + 19} ${y0 + h / 2}) rotate(-90)" text-anchor="middle">${esc(l.name)}</text>`;
+      y0 += h;
+    });
+
+    svg += d.flows.map(([from, to, label, kind]) => {
+      const a = nodes[from], b = nodes[to];
+      const ca = center(a), cb = center(b);
+      const [ahw, ahh] = half(a), [bhw, bhh] = half(b);
+      const aBarV = (a.type === "fork" || a.type === "join") && a.vert;
+      const bBarV = (b.type === "fork" || b.type === "join") && b.vert;
+      const aBarH = (a.type === "fork" || a.type === "join") && !a.vert;
+      const bBarH = (b.type === "fork" || b.type === "join") && !b.vert;
+      let pts;
+      if (aBarV && cb.x > ca.x) pts = [[ca.x + ahw, cb.y], [cb.x - bhw, cb.y]];
+      else if (bBarV && cb.x > ca.x) pts = [[ca.x + ahw, ca.y], [cb.x - bhw, ca.y]];
+      else if (aBarH) pts = [[cb.x, ca.y + ahh], [cb.x, cb.y - bhh]];
+      else if (bBarH) pts = [[ca.x, ca.y + ahh], [ca.x, cb.y - bhh]];
+      else if (cb.x > ca.x + 1) {
+        const x1 = ca.x + ahw, x2 = cb.x - bhw, mx = (x1 + x2) / 2;
+        pts = ca.y === cb.y ? [[x1, ca.y], [x2, cb.y]] : [[x1, ca.y], [mx, ca.y], [mx, cb.y], [x2, cb.y]];
+        if (kind === "down") pts = [[x1, ca.y], [cb.x, ca.y], [cb.x, cb.y - (cb.y > ca.y ? bhh : -bhh)]];
+      } else if (Math.abs(cb.x - ca.x) <= 1) {
+        const dir = cb.y > ca.y ? 1 : -1;
+        pts = [[ca.x, ca.y + dir * ahh], [cb.x, cb.y - dir * bhh]];
+      } else {
+        const yb = Math.max(ca.y, cb.y) + TH / 2 + 18;
+        pts = [[ca.x, ca.y + ahh], [ca.x, yb], [cb.x, yb], [cb.x, cb.y + bhh]];
+      }
+      const dstr = pts.map((p, i) => `${i ? "L" : "M"}${p[0]} ${p[1]}`).join("");
+      let out = `<path class="ac-flow${kind === "obj" ? " dash" : ""}" d="${dstr}" marker-end="url(#aca${id})"/>`;
+      if (label) {
+        let best = -1, bi = 0;
+        for (let i = 0; i < pts.length - 1; i++) {
+          const len = Math.abs(pts[i + 1][0] - pts[i][0]) + Math.abs(pts[i + 1][1] - pts[i][1]);
+          if (len > best) { best = len; bi = i; }
+        }
+        const p = pts[bi], q = pts[bi + 1];
+        const horiz = Math.abs(q[1] - p[1]) < 1;
+        const lx = horiz ? (p[0] + q[0]) / 2 : p[0] + 5;
+        const ly = horiz ? p[1] - 6 : (p[1] + q[1]) / 2;
+        out += `<text class="ac-flow-t" x="${lx}" y="${ly}" text-anchor="${horiz ? "middle" : "start"}">${esc(label)}</text>`;
+      }
+      return out;
+    }).join("");
+
+    d.nodes.forEach((n) => {
+      const c = center(n);
+      const t = n.type;
+      let shape = "", label = "";
+      const tspans = (lines, yAt) => lines.map((ln, i) => `<tspan x="${c.x}" y="${yAt(i, lines.length)}">${esc(ln)}</tspan>`).join("");
+      if (t === "action" || t === "call") {
+        shape = `<rect class="ac-node" x="${c.x - TW / 2}" y="${c.y - TH / 2}" width="${TW}" height="${TH}" rx="16"/>`;
+        if (t === "call") shape += `<path class="ac-ico" d="M${c.x + TW / 2 - 22} ${c.y + TH / 2 - 8}v-9M${c.x + TW / 2 - 14} ${c.y + TH / 2 - 8}v-9M${c.x + TW / 2 - 22} ${c.y + TH / 2 - 13}h8"/>`;
+        const lines = wrap(n.label, 15);
+        label = `<text class="ac-t" text-anchor="middle">${tspans(lines, (i, len) => c.y - (len - 1) * 7 + 4 + i * 14)}</text>`;
+      } else if (t === "dec" || t === "merge") {
+        shape = `<path class="ac-node" d="M${c.x} ${c.y - G}L${c.x + G} ${c.y}L${c.x} ${c.y + G}L${c.x - G} ${c.y}z"/>`;
+        const lines = n.label ? wrap(n.label, 18) : [];
+        label = `<text class="ac-t sm" text-anchor="middle">${tspans(lines, (i, len) => c.y - G - 7 - (len - 1 - i) * 13)}</text>`;
+      } else if (t === "fork" || t === "join") {
+        const [hw, hh] = half(n);
+        shape = `<rect class="ac-bar" x="${c.x - hw}" y="${c.y - hh}" width="${hw * 2}" height="${hh * 2}" rx="2"/>`;
+      } else if (t === "obj") {
+        shape = `<rect class="ac-node" x="${c.x - 46}" y="${c.y - 20}" width="92" height="40"/>`;
+        const lines = wrap(n.label, 13);
+        label = `<text class="ac-t sm" text-anchor="middle">${tspans(lines, (i, len) => c.y + 4 - (len - 1) * 6 + i * 13)}</text>`;
+      } else if (t === "send") {
+        shape = `<path class="ac-node" d="M${c.x - 52} ${c.y - 24}H${c.x + 30}L${c.x + 52} ${c.y}L${c.x + 30} ${c.y + 24}H${c.x - 52}z"/>`;
+        const lines = wrap(n.label, 13);
+        label = `<text class="ac-t sm" text-anchor="middle">${tspans(lines, (i, len) => c.y + 4 - (len - 1) * 6 + i * 13)}</text>`;
+      } else if (t === "accept") {
+        shape = `<path class="ac-node" d="M${c.x - 52} ${c.y - 24}H${c.x + 52}V${c.y + 24}H${c.x - 52}L${c.x - 34} ${c.y}z"/>`;
+        const lines = wrap(n.label, 13);
+        label = `<text class="ac-t sm" text-anchor="middle">${tspans(lines.map((x) => x), (i, len) => c.y + 4 - (len - 1) * 6 + i * 13)}</text>`;
+      } else if (t === "time") {
+        shape = `<path class="ac-node" d="M${c.x - 12} ${c.y - 16}H${c.x + 12}L${c.x} ${c.y}L${c.x + 12} ${c.y + 16}H${c.x - 12}L${c.x} ${c.y}z"/>`;
+        const lines = n.label ? wrap(n.label, 16) : [];
+        label = `<text class="ac-t sm" text-anchor="middle">${tspans(lines, (i) => c.y + 32 + i * 13)}</text>`;
+      } else {
+        if (t === "start") shape = `<circle class="ac-fill" cx="${c.x}" cy="${c.y}" r="${R - 3}"/>`;
+        else if (t === "end") shape = `<circle class="ac-node" cx="${c.x}" cy="${c.y}" r="${R}"/><circle class="ac-fill" cx="${c.x}" cy="${c.y}" r="${R - 5}"/>`;
+        else if (t === "fend") shape = `<circle class="ac-node" cx="${c.x}" cy="${c.y}" r="${R}"/><path class="ac-ico" d="M${c.x - 6} ${c.y - 6}l12 12M${c.x + 6} ${c.y - 6}l-12 12"/>`;
+        const lines = n.label ? wrap(n.label, 17) : [];
+        label = `<text class="ac-t sm" text-anchor="middle">${tspans(lines, (i) => c.y + R + 14 + i * 13)}</text>`;
+      }
+      svg += shape + label;
+    });
+
+    return `<div class="actd"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма активности">${svg}</svg></div>`;
+  }
+
+  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : q.state ? stateBlock(q.state) : q.act ? actBlock(q.act) : "");
 
   const storeKey = (track, lvl) => `sqlapiquiz:best:${track}:${lvl}`;
   const getBest = (track, lvl) => {
