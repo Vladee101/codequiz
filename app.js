@@ -1,7 +1,8 @@
 (() => {
   const TRACKS = {
     SQL: { title: "SQL Quiz", desc: "Чтение запросов: GROUP BY, JOIN, NULL, оконные функции, индексы, миграции" },
-    API: { title: "API Quiz", desc: "Контракты: HTTP-статусы, семантика методов, схемы, идемпотентность, вебхуки" }
+    API: { title: "API Quiz", desc: "Контракты: HTTP-статусы, семантика методов, схемы, идемпотентность, вебхуки" },
+    ERD: { title: "ERD Quiz", desc: "Диаграммы сущностей: связи 1:N и M:N, ключи, нормализация, целостность" }
   };
   const LEVELS = {
     basic:    { title: "Базовый" },
@@ -38,6 +39,57 @@
       if (num) return `<span class="n">${num}</span>`;
       return m;
     });
+  }
+
+  /* ---------- ERD ---------- */
+  const ERD = { W: 190, HEAD: 28, ROW: 22, GX: 80, GY: 50, PAD: 12 };
+
+  function erdBlock(name) {
+    const d = window.ERDS && window.ERDS[name];
+    if (!d) return "";
+    const { W, HEAD, ROW, GX, GY, PAD } = ERD;
+    const rows = Math.max(...d.tables.map((t) => t.row)) + 1;
+    const cols = Math.max(...d.tables.map((t) => t.col)) + 1;
+    const rowH = Array.from({ length: rows }, (_, r) =>
+      Math.max(0, ...d.tables.filter((t) => t.row === r).map((t) => HEAD + t.cols.length * ROW)));
+    const rowTop = rowH.map((_, r) => PAD + rowH.slice(0, r).reduce((a, h) => a + h + GY, 0));
+    const box = {};
+    d.tables.forEach((t) => {
+      box[t.name] = { t, x: PAD + t.col * (W + GX), y: rowTop[t.row], w: W, h: HEAD + t.cols.length * ROW };
+    });
+    const width = PAD * 2 + cols * W + (cols - 1) * GX;
+    const height = PAD * 2 + rowH.reduce((a, h) => a + h, 0) + (rows - 1) * GY;
+
+    const edge = (a, b) => {
+      const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+      const dx = b.x + b.w / 2 - cx, dy = b.y + b.h / 2 - cy;
+      const k = Math.min(dx ? a.w / 2 / Math.abs(dx) : Infinity, dy ? a.h / 2 / Math.abs(dy) : Infinity);
+      return { x: cx + dx * k, y: cy + dy * k, ux: dx / Math.hypot(dx, dy), uy: dy / Math.hypot(dx, dy) };
+    };
+
+    const lines = d.rels.map(([from, to, cardFrom, cardTo]) => {
+      const a = box[from], b = box[to];
+      const p = edge(a, b), q = edge(b, a);
+      const lab = (pt, dirx, diry, text) =>
+        `<text class="erd-card" x="${pt.x + dirx * 14 - diry * 10}" y="${pt.y + diry * 14 + dirx * 10 + 4}" text-anchor="middle">${esc(text)}</text>`;
+      return `<line class="erd-line" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>` +
+        lab(p, p.ux, p.uy, cardFrom) + lab(q, -p.ux, -p.uy, cardTo);
+    }).join("");
+
+    const tables = d.tables.map((t) => {
+      const { x, y, w, h } = box[t.name];
+      const cells = t.cols.map((c, i) => {
+        const [col, ...tag] = c.split(" ");
+        const cy = y + HEAD + i * ROW + 15;
+        return `<text class="erd-col" x="${x + 10}" y="${cy}">${esc(col)}</text>` +
+          (tag.length ? `<text class="erd-tag" x="${x + w - 10}" y="${cy}" text-anchor="end">${esc(tag.join(" "))}</text>` : "");
+      }).join("");
+      return `<rect class="erd-box" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/>` +
+        `<path class="erd-head" d="M${x} ${y + HEAD}V${y + 6}a6 6 0 0 1 6-6h${w - 12}a6 6 0 0 1 6 6V${y + HEAD}z"/>` +
+        `<text class="erd-title" x="${x + w / 2}" y="${y + 19}" text-anchor="middle">${esc(t.name)}</text>` + cells;
+    }).join("");
+
+    return `<div class="erd"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="ER-диаграмма">${lines}${tables}</svg></div>`;
   }
 
   const storeKey = (track, lvl) => `sqlapiquiz:best:${track}:${lvl}`;
@@ -108,6 +160,7 @@
       <div class="bar"><i style="width:${(i / questions.length) * 100}%"></i></div>
       <div class="badge">${q.topic}</div>
       <h2>${esc(q.q)}</h2>
+      ${q.erd ? erdBlock(q.erd) : ""}
       ${q.code ? `<pre class="code"><code>${highlight(q.code, q.lang)}</code></pre>` : ""}
       <div class="opts">
         ${q.opts.map((o, k) => `<button class="opt" data-k="${k}"><span class="key">${LETTERS[k]}</span><span>${esc(o.text)}</span></button>`).join("")}
@@ -174,6 +227,7 @@
           <div class="card">
             <div class="badge">${q.topic}</div>
             <strong>${esc(q.q)}</strong>
+            ${q.erd ? erdBlock(q.erd) : ""}
             ${q.code ? `<pre class="code" style="margin-top:10px"><code>${highlight(q.code, q.lang)}</code></pre>` : ""}
             <p class="muted">Твой ответ: ${esc(chosen)}</p>
             <p><b>Верно:</b> ${esc(q.opts.find((o) => o.correct).text)}</p>
