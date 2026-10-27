@@ -258,3 +258,5 @@ pre.code {
 .cp-t.sm { font-size: 11.5px; }
 .cp-name { font-weight: 600; }
 .cp-lab { fill: var(--accent); font-weight: 600; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
+.cp-box.dash { stroke-dasharray: 5 3; }
+.cp-fill { fill: var(--muted); }
