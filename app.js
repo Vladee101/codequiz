@@ -4,7 +4,8 @@
     API: { title: "API Quiz", desc: "Контракты: HTTP-статусы, семантика методов, схемы, идемпотентность, вебхуки" },
     ERD: { title: "ERD Quiz", desc: "Диаграммы сущностей: связи 1:N и M:N, ключи, нормализация, целостность" },
     BPMN: { title: "BPMN Quiz", desc: "Диаграммы процессов: события, шлюзы, токены, ошибки, сообщения, подпроцессы" },
-    UC: { title: "Use Case Quiz", desc: "Диаграммы вариантов использования: актёры, include, extend, границы системы, сценарии" }
+    UC: { title: "Use Case Quiz", desc: "Диаграммы вариантов использования: актёры, include, extend, границы системы, сценарии" },
+    SEQ: { title: "Sequence Quiz", desc: "Диаграммы последовательности: сообщения, активации, фрагменты alt/opt/loop/par, асинхронность" }
   };
   const LEVELS = {
     basic:    { title: "Базовый" },
@@ -336,7 +337,155 @@
     return `<div class="ucd"><svg viewBox="0 0 ${width} ${height + 24}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма вариантов использования">${svg}</svg></div>`;
   }
 
-  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : "");
+  /* ---------- Sequence ---------- */
+  const SQ = { PW: 158, PAD: 16, HEAD: 38, GAP: 36, ACT: 10 };
+  let seqId = 0;
+
+  function seqBlock(name) {
+    const d = window.SEQS && window.SEQS[name];
+    if (!d) return "";
+    const { PW, PAD, HEAD, GAP, ACT } = SQ;
+    const id = ++seqId;
+    const parts = d.participants;
+    const idx = {};
+    parts.forEach((p, i) => { idx[p.id] = i; });
+    const px = (pid) => PAD + idx[pid] * PW + PW / 2;
+    const width = PAD * 2 + parts.length * PW;
+
+    const ops = [];
+    const open = {};
+    parts.forEach((p) => { open[p.id] = []; });
+    const bars = [];
+    const ends = {};
+    const created = {};
+    let y = PAD + HEAD + 20;
+
+    const involved = (evs) => {
+      const set = [];
+      evs.forEach((e) => {
+        if (e[0] === "msg") { set.push(idx[e[1]], idx[e[2]]); }
+        else if (e[0] === "note") set.push(idx[e[1]]);
+        else if (e[0] === "frag") e[2].forEach((o) => set.push(...involved(o[1])));
+      });
+      return set;
+    };
+
+    const run = (evs) => {
+      evs.forEach((e) => {
+        if (e[0] === "msg") {
+          const [, from, to, label, kind] = e;
+          const k = kind || "sync";
+          if (from === to) {
+            y += 30;
+            ops.push({ t: "self", y, x: px(from), label, k });
+            if (k === "sync") open[to].push({ y0: y, depth: open[to].length });
+            y += 16;
+            return;
+          }
+          y += GAP;
+          if (k === "create") created[to] = y;
+          if (k === "reply") {
+            const stack = open[from];
+            if (stack.length) { const b = stack.pop(); bars.push({ lane: from, y0: b.y0, y1: y, depth: b.depth }); }
+          }
+          ops.push({ t: "msg", y, from, to, label, k, depthFrom: open[from].length, depthTo: open[to].length + (k === "sync" ? 1 : 0) });
+          if (k === "sync") open[to].push({ y0: y, depth: open[to].length });
+          if (k === "destroy") ends[to] = y;
+        } else if (e[0] === "note") {
+          y += 42;
+          ops.push({ t: "note", y, x: px(e[1]), text: e[2] });
+        } else if (e[0] === "frag") {
+          y += 12;
+          const used = involved(e[2].flatMap((o) => o[1]));
+          const lo = Math.min(...used), hi = Math.max(...used);
+          const fy0 = y;
+          y += 22;
+          const seps = [];
+          e[2].forEach((o, i) => {
+            if (i > 0) { y += 8; seps.push({ y, guard: o[0] }); y += 4; }
+            run(o[1]);
+          });
+          y += 12;
+          ops.push({ t: "frag", kind: e[1], guard: e[2][0][0], y0: fy0, y1: y, x0: PAD + lo * PW + 14, x1: PAD + (hi + 1) * PW - 14, seps });
+        }
+      });
+    };
+    run(d.events);
+    const bottom = y + 30;
+    parts.forEach((p) => {
+      open[p.id].forEach((b) => bars.push({ lane: p.id, y0: b.y0, y1: bottom - 14, depth: b.depth }));
+    });
+    const height = bottom + PAD;
+
+    let svg = `<defs>
+      <marker id="sqf${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path class="sq-fill" d="M0 1L10 5L0 9z"/></marker>
+      <marker id="sqo${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path class="sq-open" d="M0 1L10 5L0 9"/></marker>
+    </defs>`;
+
+    // фрагменты рисуем под всем остальным
+    ops.filter((o) => o.t === "frag").sort((a, b) => a.y0 - b.y0).forEach((f) => {
+      svg += `<rect class="sq-frag" x="${f.x0}" y="${f.y0}" width="${f.x1 - f.x0}" height="${f.y1 - f.y0}"/>` +
+        `<path class="sq-tag" d="M${f.x0} ${f.y0}h${f.kind.length * 7.5 + 16}v13l-7 7h-${f.kind.length * 7.5 + 9}z"/>` +
+        `<text class="sq-tag-t" x="${f.x0 + 7}" y="${f.y0 + 14}">${esc(f.kind)}</text>` +
+        (f.guard ? `<text class="sq-guard" x="${f.x0 + f.kind.length * 7.5 + 24}" y="${f.y0 + 14}">[${esc(f.guard)}]</text>` : "");
+      f.seps.forEach((s) => {
+        svg += `<line class="sq-sep" x1="${f.x0}" y1="${s.y}" x2="${f.x1}" y2="${s.y}"/>` +
+          (s.guard ? `<text class="sq-guard" x="${f.x0 + 8}" y="${s.y + 14}">[${esc(s.guard)}]</text>` : "");
+      });
+    });
+
+    // линии жизни
+    parts.forEach((p) => {
+      const top = created[p.id] ? created[p.id] : PAD + HEAD;
+      const endY = ends[p.id] ? ends[p.id] : bottom - 14;
+      svg += `<line class="sq-life" x1="${px(p.id)}" y1="${top}" x2="${px(p.id)}" y2="${endY}"/>`;
+      if (ends[p.id]) svg += `<path class="sq-x" d="M${px(p.id) - 8} ${endY - 8}l16 16M${px(p.id) + 8} ${endY - 8}l-16 16"/>`;
+    });
+
+    bars.forEach((b) => {
+      svg += `<rect class="sq-act" x="${px(b.lane) - ACT / 2 + b.depth * 5}" y="${b.y0}" width="${ACT}" height="${Math.max(b.y1 - b.y0, 10)}"/>`;
+    });
+
+    // заголовки участников
+    parts.forEach((p) => {
+      const x = px(p.id);
+      const top = created[p.id] ? created[p.id] - HEAD / 2 : PAD;
+      if (p.type === "actor") {
+        svg += `<circle class="sq-box" cx="${x}" cy="${top + 7}" r="6"/>` +
+          `<path class="sq-man" d="M${x} ${top + 13}v12M${x - 9} ${top + 17}h18M${x} ${top + 25}l-8 11M${x} ${top + 25}l8 11"/>` +
+          `<text class="sq-t" x="${x}" y="${top + 50}" text-anchor="middle">${esc(p.label)}</text>`;
+      } else {
+        svg += `<rect class="sq-box" x="${x - PW / 2 + 12}" y="${top}" width="${PW - 24}" height="${HEAD - 4}" rx="4"/>` +
+          `<text class="sq-t" x="${x}" y="${top + 21}" text-anchor="middle">${esc(p.label)}</text>`;
+      }
+    });
+
+    ops.forEach((o) => {
+      if (o.t === "msg") {
+        const xf = px(o.from), xt = px(o.to);
+        const dir = xt > xf ? 1 : -1;
+        const x1 = xf + dir * (o.depthFrom > 0 || o.k === "sync" || o.k === "reply" ? ACT / 2 : 0);
+        const toBar = o.k === "reply" ? 0 : o.k === "create" || o.k === "destroy" ? 0 : ACT / 2;
+        const x2 = xt - dir * (toBar ? toBar : o.k === "create" ? PW / 2 - 14 : 0);
+        const dashed = o.k === "reply" || o.k === "create";
+        const mk = o.k === "sync" || o.k === "destroy" ? `url(#sqf${id})` : `url(#sqo${id})`;
+        svg += `<line class="sq-msg${dashed ? " dash" : ""}" x1="${x1}" y1="${o.y}" x2="${x2}" y2="${o.y}" marker-end="${mk}"/>` +
+          `<text class="sq-m-t" x="${(x1 + x2) / 2}" y="${o.y - 6}" text-anchor="middle">${esc(o.label || "")}</text>`;
+      } else if (o.t === "self") {
+        const x = o.x + ACT / 2;
+        svg += `<path class="sq-msg" fill="none" d="M${x} ${o.y - 10}h30v20h-30" marker-end="url(#sqf${id})"/>` +
+          `<text class="sq-m-t" x="${x + 36}" y="${o.y + 4}">${esc(o.label || "")}</text>`;
+      } else if (o.t === "note") {
+        const w = Math.max(110, o.text.length * 6.3 + 18);
+        svg += `<path class="sq-note" d="M${o.x - w / 2} ${o.y - 16}h${w - 10}l10 10v22h-${w}z"/>` +
+          `<text class="sq-m-t" x="${o.x}" y="${o.y + 4}" text-anchor="middle">${esc(o.text)}</text>`;
+      }
+    });
+
+    return `<div class="seqd"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма последовательности">${svg}</svg></div>`;
+  }
+
+  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : "");
 
   const storeKey = (track, lvl) => `sqlapiquiz:best:${track}:${lvl}`;
   const getBest = (track, lvl) => {

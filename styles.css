@@ -173,3 +173,24 @@ pre.code {
 .uc-arrow { fill: none; stroke: var(--muted); stroke-width: 1.5; }
 .uc-tri { fill: var(--card); stroke: var(--muted); stroke-width: 1.4; }
 .uc-line-t { fill: var(--accent); font-size: 11.5px; font-weight: 600; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
+
+/* Sequence */
+.seqd { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px; margin: 0 0 16px; overflow-x: auto; }
+.seqd svg { display: block; width: 100%; margin: 0 auto; height: auto; font: 12.5px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.sq-box { fill: var(--card); stroke: var(--text); stroke-width: 1.5; }
+.sq-man { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-linecap: round; }
+.sq-t { fill: var(--text); font-weight: 600; }
+.sq-life { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.sq-act { fill: var(--bg); stroke: var(--text); stroke-width: 1.3; }
+.sq-msg { stroke: var(--text); stroke-width: 1.4; fill: none; }
+.sq-msg.dash { stroke-dasharray: 6 4; }
+.sq-fill { fill: var(--text); }
+.sq-open { fill: none; stroke: var(--text); stroke-width: 1.4; }
+.sq-m-t { fill: var(--text); font-size: 12px; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
+.sq-x { stroke: var(--bad); stroke-width: 2.2; fill: none; }
+.sq-frag { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+.sq-tag { fill: var(--bg); stroke: var(--muted); stroke-width: 1.2; }
+.sq-tag-t { fill: var(--text); font-weight: 700; font-size: 11.5px; }
+.sq-guard { fill: var(--accent); font-size: 11.5px; font-weight: 600; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
+.sq-sep { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+.sq-note { fill: var(--ok-bg); stroke: var(--ok); stroke-width: 1.2; }
