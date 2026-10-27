@@ -3,7 +3,8 @@
     SQL: { title: "SQL Quiz", desc: "Чтение запросов: GROUP BY, JOIN, NULL, оконные функции, индексы, миграции" },
     API: { title: "API Quiz", desc: "Контракты: HTTP-статусы, семантика методов, схемы, идемпотентность, вебхуки" },
     ERD: { title: "ERD Quiz", desc: "Диаграммы сущностей: связи 1:N и M:N, ключи, нормализация, целостность" },
-    BPMN: { title: "BPMN Quiz", desc: "Диаграммы процессов: события, шлюзы, токены, ошибки, сообщения, подпроцессы" }
+    BPMN: { title: "BPMN Quiz", desc: "Диаграммы процессов: события, шлюзы, токены, ошибки, сообщения, подпроцессы" },
+    UC: { title: "Use Case Quiz", desc: "Диаграммы вариантов использования: актёры, include, extend, границы системы, сценарии" }
   };
   const LEVELS = {
     basic:    { title: "Базовый" },
@@ -258,7 +259,84 @@
     return `<div class="bpmn"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="BPMN-диаграмма">${svg}</svg></div>`;
   }
 
-  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : "");
+  /* ---------- Use Case ---------- */
+  const UCD = { CW: 172, RH: 86, PAD: 14, TOP: 34, RX: 66, RY: 28 };
+  let ucSeq = 0;
+
+  function ucBlock(name) {
+    const d = window.UCDS && window.UCDS[name];
+    if (!d) return "";
+    const { CW, RH, PAD, TOP, RX, RY } = UCD;
+    const id = ++ucSeq;
+    const nodes = {};
+    d.nodes.forEach((n) => { nodes[n.id] = n; });
+    const cols = Math.max(...d.nodes.map((n) => n.col)) + 1;
+    const rows = Math.max(...d.nodes.map((n) => n.row)) + 1;
+    const hasSys = !!d.system;
+    const top = PAD + (hasSys ? TOP : 0);
+    const center = (n) => ({ x: PAD + n.col * CW + CW / 2, y: top + n.row * RH + RH / 2 - (n.type === "uc" ? 0 : 6) });
+    const width = PAD * 2 + cols * CW;
+    const height = top + rows * RH + PAD;
+
+    // размеры для обрезки линий по границе фигуры
+    const shape = (n) => (n.type === "uc" ? { rx: RX, ry: RY } : n.type === "sys" ? { hw: 63, hh: 22 } : { rx: 18, ry: 32 });
+    const clip = (n, toward) => {
+      const c = center(n), t = center(toward);
+      const dx = t.x - c.x, dy = t.y - c.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const s = shape(n);
+      let k;
+      if (s.hw) k = Math.min(ux ? s.hw / Math.abs(ux) : Infinity, uy ? s.hh / Math.abs(uy) : Infinity);
+      else k = 1 / Math.sqrt((ux / s.rx) ** 2 + (uy / s.ry) ** 2);
+      return { x: c.x + ux * k, y: c.y + uy * k, ux, uy };
+    };
+
+    let svg = `<defs>
+      <marker id="uca${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="uc-arrow" d="M1 1L9 5L1 9"/></marker>
+      <marker id="ucg${id}" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto"><path class="uc-tri" d="M1 1L11 6L1 11z"/></marker>
+    </defs>`;
+
+    if (hasSys) {
+      const x0 = PAD + d.system.c0 * CW + 8, x1 = PAD + (d.system.c1 + 1) * CW - 8;
+      svg += `<rect class="uc-sys" x="${x0}" y="${PAD}" width="${x1 - x0}" height="${height - PAD * 2}" rx="6"/>` +
+        `<text class="uc-sys-t" x="${(x0 + x1) / 2}" y="${PAD + 21}" text-anchor="middle">${esc(d.system.name)}</text>`;
+    }
+
+    svg += d.flows.map(([from, to, kind, label]) => {
+      const a = nodes[from], b = nodes[to];
+      const p = clip(a, b), q = clip(b, a);
+      const k = kind || "assoc";
+      const cls = k === "include" || k === "extend" ? "uc-line dash" : "uc-line";
+      const marker = k === "include" || k === "extend" ? ` marker-end="url(#uca${id})"` : k === "gen" ? ` marker-end="url(#ucg${id})"` : "";
+      let out = `<line class="${cls}" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"${marker}/>`;
+      const text = label || (k === "include" ? "«include»" : k === "extend" ? "«extend»" : "");
+      if (text) out += `<text class="uc-line-t" x="${(p.x + q.x) / 2}" y="${(p.y + q.y) / 2 - 6}" text-anchor="middle">${esc(text)}</text>`;
+      return out;
+    }).join("");
+
+    d.nodes.forEach((n) => {
+      const c = center(n);
+      if (n.type === "uc") {
+        const lines = wrap(n.label, 17);
+        svg += `<ellipse class="uc-node" cx="${c.x}" cy="${c.y}" rx="${RX}" ry="${RY}"/>` +
+          `<text class="uc-t" text-anchor="middle">${lines.map((ln, i) => `<tspan x="${c.x}" y="${c.y + 4 - (lines.length - 1) * 7 + i * 14}">${esc(ln)}</tspan>`).join("")}</text>`;
+      } else if (n.type === "sys") {
+        svg += `<rect class="uc-node" x="${c.x - 63}" y="${c.y - 22}" width="126" height="44" rx="3"/>` +
+          `<text class="uc-t sm" x="${c.x}" y="${c.y - 4}" text-anchor="middle">«system»</text>` +
+          `<text class="uc-t" x="${c.x}" y="${c.y + 12}" text-anchor="middle">${esc(n.label)}</text>`;
+      } else {
+        const lines = wrap(n.label, 14);
+        svg += `<circle class="uc-node" cx="${c.x}" cy="${c.y - 22}" r="9"/>` +
+          `<path class="uc-man" d="M${c.x} ${c.y - 13}V${c.y + 8}M${c.x - 14} ${c.y - 6}H${c.x + 14}M${c.x} ${c.y + 8}L${c.x - 12} ${c.y + 28}M${c.x} ${c.y + 8}L${c.x + 12} ${c.y + 28}"/>` +
+          `<text class="uc-t sm" text-anchor="middle">${lines.map((ln, i) => `<tspan x="${c.x}" y="${c.y + 44 + i * 13}">${esc(ln)}</tspan>`).join("")}</text>`;
+      }
+    });
+
+    return `<div class="ucd"><svg viewBox="0 0 ${width} ${height + 24}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма вариантов использования">${svg}</svg></div>`;
+  }
+
+  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : "");
 
   const storeKey = (track, lvl) => `sqlapiquiz:best:${track}:${lvl}`;
   const getBest = (track, lvl) => {
