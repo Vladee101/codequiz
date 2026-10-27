@@ -8,7 +8,8 @@
     SEQ: { title: "Sequence Quiz", desc: "Диаграммы последовательности: сообщения, активации, фрагменты alt/opt/loop/par, асинхронность" },
     STATE: { title: "State Quiz", desc: "Диаграммы состояний: переходы, охранные условия, действия, вложенные состояния, история" },
     ACT: { title: "Activity Quiz", desc: "Диаграммы активности: действия, ветвления, fork/join, дорожки, объекты и сигналы" },
-    CLS: { title: "Class Quiz", desc: "Диаграммы классов: наследование, ассоциации, агрегация и композиция, интерфейсы, кратности" }
+    CLS: { title: "Class Quiz", desc: "Диаграммы классов: наследование, ассоциации, агрегация и композиция, интерфейсы, кратности" },
+    CMP: { title: "Component Quiz", desc: "Диаграммы компонентов: интерфейсы, порты, зависимости, слои, границы подсистем" }
   };
   const LEVELS = {
     basic:    { title: "Базовый" },
@@ -830,7 +831,101 @@
     return `<div class="cls"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма классов">${svg}</svg></div>`;
   }
 
-  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : q.state ? stateBlock(q.state) : q.act ? actBlock(q.act) : q.cls ? classBlock(q.cls) : "");
+  /* ---------- Component ---------- */
+  const CP = { CW: 200, RH: 104, PAD: 14, W: 132, H: 54 };
+  let cmpSeq = 0;
+
+  function componentBlock(name) {
+    const d = window.COMPS && window.COMPS[name];
+    if (!d) return "";
+    const { CW, RH, PAD, W, H } = CP;
+    const id = ++cmpSeq;
+    const nodes = {};
+    d.nodes.forEach((n) => { nodes[n.id] = n; });
+    const items = d.nodes.filter((n) => n.type !== "group");
+    const cols = Math.max(...items.map((n) => n.col), ...d.nodes.filter((n) => n.type === "group").map((g) => g.c1)) + 1;
+    const rows = Math.max(...items.map((n) => n.row), ...d.nodes.filter((n) => n.type === "group").map((g) => g.r1)) + 1;
+    const width = PAD * 2 + cols * CW;
+    const height = PAD * 2 + rows * RH + 6;
+    const center = (n) => ({ x: PAD + n.col * CW + CW / 2, y: PAD + n.row * RH + RH / 2 });
+    const half = (n) => (n.type === "iface" ? [9, 9] : [W / 2, (n.stereo ? H + 8 : H) / 2]);
+    const clip = (n, toward, pad) => {
+      const c = center(n), t = center(toward);
+      const dx = t.x - c.x, dy = t.y - c.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const [hw, hh] = half(n);
+      const k = n.type === "iface" ? hw + (pad || 0) : Math.min(ux ? hw / Math.abs(ux) : Infinity, uy ? hh / Math.abs(uy) : Infinity);
+      return { x: c.x + ux * k, y: c.y + uy * k, ux, uy };
+    };
+
+    let svg = `<defs><marker id="cpa${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path class="cp-open" d="M1 1L9 5L1 9"/></marker></defs>`;
+
+    d.nodes.filter((n) => n.type === "group").forEach((g) => {
+      const x0 = PAD + g.c0 * CW + 6, x1 = PAD + (g.c1 + 1) * CW - 6;
+      const y0 = PAD + g.r0 * RH + 2, y1 = PAD + (g.r1 + 1) * RH - 2;
+      svg += `<rect class="cp-group" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="8"/>` +
+        `<text class="cp-t sm" x="${x0 + 10}" y="${y0 + 15}">${g.stereo ? "«" + esc(g.stereo) + "» " : ""}<tspan font-weight="700">${esc(g.label)}</tspan></text>`;
+    });
+
+    svg += d.rels.map(([from, to, kind, label]) => {
+      const a = nodes[from], b = nodes[to];
+      let out = "";
+      if (kind === "require" && b.type === "iface") {
+        const c = center(b), t = center(a);
+        const dx = t.x - c.x, dy = t.y - c.y, len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        const R = 15, ang = Math.atan2(uy, ux);
+        const sx = c.x + R * Math.cos(ang - Math.PI / 2), sy = c.y + R * Math.sin(ang - Math.PI / 2);
+        const ex = c.x + R * Math.cos(ang + Math.PI / 2), ey = c.y + R * Math.sin(ang + Math.PI / 2);
+        out += `<path class="cp-line" fill="none" d="M${sx} ${sy}A${R} ${R} 0 0 1 ${ex} ${ey}"/>`;
+        const p = clip(a, b), qx = c.x + ux * R, qy = c.y + uy * R;
+        out += `<line class="cp-line" x1="${p.x}" y1="${p.y}" x2="${qx}" y2="${qy}"/>`;
+      } else if (kind === "provide" && b.type === "iface") {
+        const p = clip(a, b), q = clip(b, a);
+        out += `<line class="cp-line" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>`;
+      } else {
+        const p = clip(a, b), q = clip(b, a);
+        const dashed = kind === "dep";
+        out += `<line class="cp-line${dashed ? " dash" : ""}" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"${dashed ? ` marker-end="url(#cpa${id})"` : ""}/>`;
+        if (label) out += `<text class="cp-t sm cp-lab" x="${(p.x + q.x) / 2}" y="${(p.y + q.y) / 2 - 6}" text-anchor="middle">${esc(label)}</text>`;
+      }
+      return out;
+    }).join("");
+
+    items.forEach((n) => {
+      const c = center(n);
+      if (n.type === "iface") {
+        svg += `<circle class="cp-box" cx="${c.x}" cy="${c.y}" r="9"/>` +
+          `<text class="cp-t sm" x="${c.x}" y="${c.y + 30}" text-anchor="middle">${esc(n.label)}</text>`;
+      } else {
+        const h = n.stereo ? H + 8 : H;
+        const x = c.x - W / 2, y = c.y - h / 2;
+        svg += `<rect class="cp-box" x="${x}" y="${y}" width="${W}" height="${h}" rx="3"/>` +
+          `<rect class="cp-icon" x="${x + W - 22}" y="${y + 6}" width="14" height="10"/>` +
+          `<rect class="cp-icon" x="${x + W - 25}" y="${y + 8}" width="6" height="3"/>` +
+          `<rect class="cp-icon" x="${x + W - 25}" y="${y + 12}" width="6" height="3"/>`;
+        if (n.stereo) svg += `<text class="cp-t sm" x="${c.x - 6}" y="${y + 17}" text-anchor="middle">«${esc(n.stereo)}»</text>`;
+        const lines = wrap(n.label, 15);
+        svg += `<text class="cp-t cp-name" text-anchor="middle">${lines.map((ln, i) => `<tspan x="${c.x - 4}" y="${c.y + (n.stereo ? 10 : 5) - (lines.length - 1) * 7 + i * 14}">${esc(ln)}</tspan>`).join("")}</text>`;
+        (n.ports || []).forEach((pt) => {
+          const [side, lab] = pt.split(":");
+          const px = side === "left" ? x - 6 : side === "right" ? x + W - 6 : c.x - 6;
+          const py = side === "top" ? y - 6 : side === "bottom" ? y + h - 6 : c.y - 6;
+          svg += `<rect class="cp-port" x="${px}" y="${py}" width="12" height="12"/>`;
+          if (lab) {
+            const tx = side === "left" ? px - 4 : side === "right" ? px + 16 : c.x;
+            const ty = side === "top" ? py - 5 : side === "bottom" ? py + 24 : py - 4;
+            svg += `<text class="cp-t sm" x="${tx}" y="${ty}" text-anchor="${side === "left" ? "end" : side === "right" ? "start" : "middle"}">${esc(lab)}</text>`;
+          }
+        });
+      }
+    });
+
+    return `<div class="cmpd"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма компонентов">${svg}</svg></div>`;
+  }
+
+  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : q.state ? stateBlock(q.state) : q.act ? actBlock(q.act) : q.cls ? classBlock(q.cls) : q.cmp ? componentBlock(q.cmp) : "");
 
   const storeKey = (track, lvl) => `sqlapiquiz:best:${track}:${lvl}`;
   const getBest = (track, lvl) => {
