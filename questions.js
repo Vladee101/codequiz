@@ -1,6 +1,6 @@
 // Манифест банка вопросов. Сами вопросы лежат в data/<направление>.js и подгружаются при выборе направления.
 // answer — индекс верного варианта в options (0..2); порядок вариантов перемешивается при показе.
-// topic: "SQL" | "API" | "ERD" | "BPMN" | "UC" | "SEQ" | "STATE" | "ACT" | "CLS" | "CMP" | "SD"; lang: "sql" | "json" | "yaml" | "http" | "text"
+// topic: "SQL" | "API" | "ERD" | "BPMN" | "UC" | "SEQ" | "STATE" | "ACT" | "CLS" | "CMP" | "SD" | "KAFKA"; lang: "sql" | "json" | "yaml" | "http" | "text"
 // У вопроса с диаграммой есть поле erd / bpmn / uc / seq / state / act / cls / cmp / sd — имя схемы из того же файла data/*.js.
 window.QUESTIONS = { basic: [], medium: [], advanced: [] };
 window.TRACK_FILES = {
@@ -14,7 +14,8 @@ window.TRACK_FILES = {
   ACT: "data/act.js",
   CLS: "data/cls.js",
   CMP: "data/cmp.js",
-  SD: "data/sd.js"
+  SD: "data/sd.js",
+  KAFKA: "data/kafka.js"
 };
 // Число вопросов по направлениям (для главного экрана, пока файлы не загружены).
 window.TRACK_COUNTS = {
@@ -28,5 +29,6 @@ window.TRACK_COUNTS = {
   ACT: 150,
   CLS: 150,
   CMP: 150,
-  SD: 150
+  SD: 150,
+  KAFKA: 45
 };
