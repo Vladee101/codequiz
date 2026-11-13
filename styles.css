@@ -260,3 +260,21 @@ pre.code {
 .cp-lab { fill: var(--accent); font-weight: 600; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
 .cp-box.dash { stroke-dasharray: 5 3; }
 .cp-fill { fill: var(--muted); }
+
+/* C4 */
+.c4d { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px; margin: 0 0 16px; overflow-x: auto; }
+.c4d svg { display: block; width: 100%; margin: 0 auto; height: auto; font: 12.5px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.c4-box { fill: var(--card); stroke: var(--text); stroke-width: 1.6; }
+.c4-box.ext { fill: var(--bg); stroke: var(--muted); }
+.c4-box.sys { stroke: var(--accent); stroke-width: 2; }
+.c4-head { fill: var(--card); stroke: var(--text); stroke-width: 1.6; }
+.c4-man { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linecap: round; }
+.c4-group { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 7 4; }
+.c4-group-t { fill: var(--muted); font-weight: 600; }
+.c4-line { stroke: var(--muted); stroke-width: 1.5; }
+.c4-arrow { fill: var(--muted); }
+.c4-name { fill: var(--text); font-weight: 700; font-size: 13px; }
+.c4-tag { fill: var(--accent); font-size: 11px; font-weight: 600; }
+.c4-desc { fill: var(--muted); font-size: 11.5px; }
+.c4-lab { fill: var(--accent); font-weight: 600; font-size: 11.5px; }
+.c4-lab-bg { fill: var(--card); stroke: var(--border); stroke-width: 1; }

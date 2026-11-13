@@ -12,7 +12,8 @@
     CMP: { title: "Component Quiz", desc: "Диаграммы компонентов: интерфейсы, порты, зависимости, слои, границы подсистем" },
     SD: { title: "System Design Quiz", desc: "Архитектура систем: масштабирование, кэши, базы данных, очереди, согласованность, отказоустойчивость" },
     KAFKA: { title: "Kafka Quiz", desc: "Брокеры и топики: партиции, офсеты, consumer-группы, репликация, доставка, транзакции" },
-    RMQ: { title: "RabbitMQ Quiz", desc: "AMQP-брокер: exchange и binding, очереди и ack, prefetch, TTL и DLX, кворумные очереди, кластеризация" }
+    RMQ: { title: "RabbitMQ Quiz", desc: "AMQP-брокер: exchange и binding, очереди и ack, prefetch, TTL и DLX, кворумные очереди, кластеризация" },
+    C4: { title: "C4 Quiz", desc: "Модель C4: уровни контекст, контейнеры, компоненты, персоны, внешние системы и связи с технологиями" }
   };
   const LEVELS = {
     basic:    { title: "Базовый" },
@@ -953,7 +954,93 @@
     return `<div class="cmpd"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="Диаграмма компонентов">${svg}</svg></div>`;
   }
 
-  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : q.state ? stateBlock(q.state) : q.act ? actBlock(q.act) : q.cls ? classBlock(q.cls) : q.cmp ? componentBlock(q.cmp) : q.sd ? componentBlock(q.sd, window.SDS) : "");
+  /* ---------- C4 ---------- */
+  const C4 = { CW: 260, RH: 190, PAD: 14, W: 208, H: 116 };
+  let c4Seq = 0;
+
+  function c4Block(name) {
+    const d = window.C4S && window.C4S[name];
+    if (!d) return "";
+    const { CW, RH, PAD, W, H } = C4;
+    const id = ++c4Seq;
+    const nodes = {};
+    d.nodes.forEach((n) => { nodes[n.id] = n; });
+    const items = d.nodes.filter((n) => n.type !== "group");
+    const groups = d.nodes.filter((n) => n.type === "group");
+    const cols = Math.max(...items.map((n) => n.col), ...groups.map((g) => g.c1)) + 1;
+    const rows = Math.max(...items.map((n) => n.row), ...groups.map((g) => g.r1)) + 1;
+    const width = PAD * 2 + cols * CW;
+    const height = PAD * 2 + rows * RH + 6;
+    const center = (n) => ({ x: PAD + n.col * CW + CW / 2, y: PAD + n.row * RH + RH / 2 });
+    const half = (n) => (n.type === "person" ? [W / 2, 76] : [W / 2, H / 2]);
+    const clip = (n, toward) => {
+      const c = center(n), t = center(toward);
+      const dx = t.x - c.x, dy = t.y - c.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const [hw, hh] = half(n);
+      const k = Math.min(ux ? hw / Math.abs(ux) : Infinity, uy ? hh / Math.abs(uy) : Infinity);
+      return { x: c.x + ux * k, y: c.y + uy * k };
+    };
+
+    let svg = `<defs><marker id="c4a${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="c4-arrow" d="M0 1L10 5L0 9z"/></marker></defs>`;
+
+    groups.forEach((g) => {
+      const x0 = PAD + g.c0 * CW + 8, x1 = PAD + (g.c1 + 1) * CW - 8;
+      const y0 = PAD + g.r0 * RH + 6, y1 = PAD + (g.r1 + 1) * RH - 6;
+      svg += `<rect class="c4-group" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="10"/>` +
+        `<text class="c4-group-t" x="${x0 + 12}" y="${y0 + 20}">${esc(g.label)}</text>`;
+    });
+
+    const labels = [];
+    svg += (d.rels || []).map(([from, to, label]) => {
+      const a = nodes[from], b = nodes[to];
+      const p = clip(a, b), q = clip(b, a);
+      if (label) labels.push({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, text: label });
+      return `<line class="c4-line" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" marker-end="url(#c4a${id})"/>`;
+    }).join("");
+
+    const elText = (n, cx, y0) => {
+      const name = wrap(n.label, 22).slice(0, 2);
+      const tag = n.tag ? wrap(n.tag, 30).slice(0, 2) : [];
+      const desc = n.desc ? wrap(n.desc, 30).slice(0, 3) : [];
+      let out = "", yy = y0 + 14;
+      out += `<text class="c4-name" text-anchor="middle">${name.map((ln, i) => `<tspan x="${cx}" y="${yy + i * 14}">${esc(ln)}</tspan>`).join("")}</text>`;
+      yy += name.length * 14 + 1;
+      tag.forEach((ln) => { out += `<text class="c4-tag" x="${cx}" y="${yy}" text-anchor="middle">${esc(ln)}</text>`; yy += 13; });
+      yy += 3;
+      desc.forEach((ln) => { out += `<text class="c4-desc" x="${cx}" y="${yy}" text-anchor="middle">${esc(ln)}</text>`; yy += 13; });
+      return out;
+    };
+
+    items.forEach((n) => {
+      const c = center(n);
+      if (n.type === "person") {
+        svg += `<circle class="c4-head" cx="${c.x}" cy="${c.y - 62}" r="9"/>` +
+          `<path class="c4-man" d="M${c.x} ${c.y - 53}V${c.y - 30}M${c.x - 16} ${c.y - 44}H${c.x + 16}M${c.x} ${c.y - 30}L${c.x - 12} ${c.y - 8}M${c.x} ${c.y - 30}L${c.x + 12} ${c.y - 8}"/>` +
+          elText(n, c.x, c.y - 4);
+      } else if (n.type === "db") {
+        const x = c.x - W / 2, y = c.y - H / 2;
+        svg += `<path class="c4-box" d="M${x} ${y + 9}a${W / 2} 9 0 0 1 ${W} 0v${H - 18}a${W / 2} 9 0 0 1 -${W} 0z"/>` +
+          `<path class="c4-box" fill="none" d="M${x} ${y + 9}a${W / 2} 9 0 0 0 ${W} 0"/>` +
+          elText(n, c.x, y + 8);
+      } else {
+        const cls = n.type === "ext" ? " ext" : n.type === "sys" ? " sys" : "";
+        svg += `<rect class="c4-box${cls}" x="${c.x - W / 2}" y="${c.y - H / 2}" width="${W}" height="${H}" rx="7"/>` +
+          elText(n, c.x, c.y - H / 2 + 6);
+      }
+    });
+
+    labels.forEach((l) => {
+      const w = l.text.length * 6.3 + 12;
+      svg += `<rect class="c4-lab-bg" x="${l.x - w / 2}" y="${l.y - 21}" width="${w}" height="16" rx="4"/>` +
+        `<text class="c4-lab" x="${l.x}" y="${l.y - 9}" text-anchor="middle">${esc(l.text)}</text>`;
+    });
+
+    return `<div class="c4d"><svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.min(width, 560)}px;max-width:${Math.round(width * 1.25)}px" role="img" aria-label="C4-диаграмма">${svg}</svg></div>`;
+  }
+
+  const diagram = (q) => (q.erd ? erdBlock(q.erd) : q.bpmn ? bpmnBlock(q.bpmn) : q.uc ? ucBlock(q.uc) : q.seq ? seqBlock(q.seq) : q.state ? stateBlock(q.state) : q.act ? actBlock(q.act) : q.cls ? classBlock(q.cls) : q.cmp ? componentBlock(q.cmp) : q.sd ? componentBlock(q.sd, window.SDS) : q.c4 ? c4Block(q.c4) : "");
 
   const storeKey = (track, lvl) => `sqlapiquiz:best:${track}:${lvl}`;
   const getBest = (track, lvl) => {
